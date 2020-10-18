@@ -19,7 +19,7 @@
 
 // global variables
 float timeout; // unit: us
-float dist_min, dist_max, dist_raw, dist_prev, dist_ema, duty_min, duty_max, alpha, duty_raw; // unit: mm
+float dist_min, dist_max, dist_raw, dist_prev, dist_ema, alpha, duty_raw; // unit: mm
 unsigned long last_sampling_time; // unit: ms
 float scale; // used for pulse duration to distance conversion
 Servo myservo;
@@ -38,8 +38,6 @@ void setup() {
   dist_min = _DIST_MIN; 
   dist_max = _DIST_MAX;
   alpha = _DIST_ALPHA;
-  duty_min = _DIST_MIN;
-  duty_max = _DIST_MAX;
   timeout = (INTERVAL / 2) * 1000.0; // precalculate pulseIn() timeout value. (unit: us)
   dist_raw = dist_prev = 0.0; // raw distance output from USS (unit: mm)
   scale = 0.001 * 0.5 * SND_VEL;
