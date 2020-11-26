@@ -36,7 +36,9 @@
 #define _INTERVAL_SERIAL 100 // Serial제어주기 (ms)
 
 // PID parameters
-#define _KP 0.75 
+#define _KP 0.7
+#define _UP_KP 1.2
+#define _DOWN_KP 0.2
 
 //////////////////////
 // global variables //
@@ -124,12 +126,14 @@ if (millis() >= last_sampling_time_dist + _INTERVAL_DIST)
 
   // duty_target = f(duty_neutral, control)
   if (error_curr > 0){
+    control = _DOWN_KP * pterm;
     duty_target = map(control, 0, _DIST_TARGET - _DIST_MIN, _DUTY_NEU, _DUTY_MAX); 
   }
   else{
     if (error_curr == 0){
       duty_target = _DUTY_NEU;
     }
+    control = _UP_KP * pterm;
     duty_target = map(control, _DIST_TARGET - _DIST_MAX, 0, _DUTY_MIN, _DUTY_NEU);
   }
 
