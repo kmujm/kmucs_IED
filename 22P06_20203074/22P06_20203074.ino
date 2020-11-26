@@ -119,18 +119,18 @@ if (millis() >= last_sampling_time_dist + _INTERVAL_DIST)
 
   // PID control logic
     error_curr = dist_target - dist_raw; // 현재 읽어들인 데이터와 기준 값의 차이
-    pterm = _KP * error_curr; // p게인 값인 kp와 error 값의 곱
-    control = pterm; 
+    pterm = error_curr; // p게인 값인 kp와 error 값의 곱
+    control = _KP * pterm; 
 
   // duty_target = f(duty_neutral, control)
   if (error_curr > 0){
-    duty_target = (( _DUTY_MAX - _DUTY_NEU)/(_DIST_TARGET - _DIST_MIN) * (_DIST_TARGET - dist_raw) + _DUTY_NEU) * control; 
+    duty_target = map(control, 0, _DIST_TARGET - _DIST_MIN, _DUTY_NEU, _DUTY_MAX); 
   }
   else{
     if (error_curr == 0){
       duty_target = _DUTY_NEU;
     }
-    duty_target = ((_DUTY_NEU - _DUTY_MIN)/(_DIST_MAX - _DIST_TARGET) * (dist_raw - _DIST_TARGET) + _DUTY_NEU) * control;
+    duty_target = map(control, _DIST_TARGET - _DIST_MAX, 0, _DUTY_MIN, _DUTY_NEU);
   }
 
   // keep duty_target value within the range of [_DUTY_MIN, _DUTY_MAX]
