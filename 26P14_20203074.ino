@@ -14,12 +14,9 @@
 #define _DIST_MIN 100 
 #define _DIST_MAX 410 
 
-//filter
-#define LENGTH 30
-#define k_LENGTH 8
 
 // Distance sensor
-#define _DIST_ALPHA 0.65 
+#define _DIST_ALPHA 0.25
 
 // Servo range
 #define _DUTY_MIN 1160  // servo full clockwise position (0 degree)
@@ -28,7 +25,7 @@
 
 // Servo speed control
 #define _SERVO_ANGLE 30 
-#define _SERVO_SPEED 100 
+#define _SERVO_SPEED 180 
 
 // Event periods
 #define _INTERVAL_DIST 20  // 거리측정주기 (ms)
@@ -36,9 +33,10 @@
 #define _INTERVAL_SERIAL 100 // Serial제어주기 (ms)
 
 // PID parameters
-#define _KP 0.7
-#define _UP_KP 1.2
-#define _DOWN_KP 0.4
+#define _KP 0.5
+#define _UP_KP 0.4
+#define _DOWN_KP 0.2
+#define _KD 35.0
 
 //////////////////////
 // global variables //
@@ -49,10 +47,9 @@ Servo myservo;
 
 // Distance sensor
 float dist_target; // location to send the ball
-int correction_dist, iter;
-float dist_list[LENGTH], sum;
 float dist_raw, dist_ema;  // 센서가 인식한 거리/ema 필터링된 거리
-const float coE[] = {-0.0000004, -0.0004444, 1.2066632, 24.0073521};
+float last_sampling_dist;
+const float coE[] = {0.0000042, -0.0046013, 2.0952295, -25.4350475}; //{0.0000050, -0.0054632, 2.0654349, -13.9520828};
 
 // Event periods
 unsigned long last_sampling_time_dist, last_sampling_time_servo, last_sampling_time_serial; 
@@ -71,8 +68,6 @@ pinMode(PIN_LED, OUTPUT); // PIN_LED 핀을 OUTPUT으로 설정
 myservo.attach(PIN_SERVO); // PIN_SERVO 핀을 servo를 쓰는 핀으로 설정
 
 // initialize global variables
-correction_dist = 0;
-iter = 0; sum = 0;
 dist_target = _DIST_TARGET;
 
 // move servo to neutral position
@@ -117,23 +112,23 @@ if (millis() >= last_sampling_time_dist + _INTERVAL_DIST)
   if(event_dist) {
      event_dist = false;
   // get a distance reading from the distance sensor
-      dist_raw = ir_distance_filtered();
+      dist_raw = ir_distance();
 
   // PID control logic
     error_curr = dist_target - dist_raw; // 현재 읽어들인 데이터와 기준 값의 차이
     pterm = error_curr; // p게인 값인 kp와 error 값의 곱
-    control = _KP * pterm; 
+    dterm = _KD * (error_curr - error_prev);
+    control = pterm + dterm; 
+   //update error_prev
+   error_prev = error_curr;
 
   // duty_target = f(duty_neutral, control)
   if (error_curr > 0){
-    control = _DOWN_KP * pterm;
+    control = _DOWN_KP * pterm + dterm;;
     duty_target = map(control, 0, _DIST_TARGET - _DIST_MIN, _DUTY_NEU, _DUTY_MAX); 
   }
   else{
-    if (error_curr == 0){
-      duty_target = _DUTY_NEU;
-    }
-    control = _UP_KP * pterm;
+    control = _UP_KP * pterm + dterm;
     duty_target = map(control, _DIST_TARGET - _DIST_MAX, 0, _DUTY_MIN, _DUTY_NEU);
   }
 
@@ -171,6 +166,8 @@ if (millis() >= last_sampling_time_dist + _INTERVAL_DIST)
     Serial.print(dist_raw);
     Serial.print(",pterm:");
     Serial.print(map(pterm,-1000,1000,510,610));
+    Serial.print(",dterm:");
+    Serial.print(map(dterm,-1000,1000,510,610));
     Serial.print(",duty_target:");
     Serial.print(map(duty_target,1000,2000,410,510));
     Serial.print(",duty_curr:");
@@ -183,42 +180,17 @@ if (millis() >= last_sampling_time_dist + _INTERVAL_DIST)
 }
 
 float ir_distance(void){ // return value unit: mm
-  float val;
+  float val, dist_raw;
   float volt = float(analogRead(PIN_IR));
   val = ((6762.0/(volt-9.0))-4.0) * 10.0;
-  return val;
-}
-
-float ir_distance_filtered(void){ // return value unit: mm
-  sum = 0;
-  iter = 0;
-  float raw = ir_distance();
-  while (iter < LENGTH)
-  {
-    dist_list[iter] = coE[0] * pow(raw, 3) + coE[1] * pow(raw, 2) + coE[2] * raw + coE[3];
-    sum += dist_list[iter];
-    iter++;
+  dist_raw = coE[0] * pow(val, 3) + coE[1] * pow(val, 2) + coE[2] * val + coE[3];
+  if (dist_raw >= _DIST_MIN && dist_raw <= _DIST_MAX) {
+    last_sampling_dist = dist_raw;
   }
-
-  for (int i = 0; i < LENGTH-1; i++){
-    for (int j = i+1; j < LENGTH; j++){
-      if (dist_list[i] > dist_list[j]) {
-        float tmp = dist_list[i];
-        dist_list[i] = dist_list[j];
-        dist_list[j] = tmp;
-      }
-    }
+  else {
+    dist_raw = last_sampling_dist;
   }
-  
-  for (int i = 0; i < k_LENGTH; i++) {
-    sum -= dist_list[i];
-  }
-  for (int i = 1; i <= k_LENGTH; i++) {
-    sum -= dist_list[LENGTH-i];
-  }
+  dist_ema =  (1.0 - _DIST_ALPHA) * dist_ema + _DIST_ALPHA * dist_raw;
 
-  float dist_cali = sum/(LENGTH-2*k_LENGTH);
-
-  dist_ema =  (1.0 - _DIST_ALPHA) * dist_ema + _DIST_ALPHA * dist_cali;
   return dist_ema;
 }
